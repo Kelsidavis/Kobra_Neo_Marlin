@@ -3564,24 +3564,18 @@ void Stepper::endstop_triggered(const AxisEnum axis) {
 
   ATOMIC_SECTION_START();   // Suspend the Stepper ISR on all platforms
 
-  endstops_trigsteps[axis] = (
-    #if IS_CORE
-      (axis == CORE_AXIS_2
-        ? CORESIGN(count_position[CORE_AXIS_1] - count_position[CORE_AXIS_2])
-        : count_position[CORE_AXIS_1] + count_position[CORE_AXIS_2]
-      ) * double(0.5)
-    #elif ENABLED(MARKFORGED_XY)
-      axis == CORE_AXIS_1
-        ? count_position[CORE_AXIS_1] TERN(MARKFORGED_INVERSE, +, -) count_position[CORE_AXIS_2]
-        : count_position[CORE_AXIS_2]
-    #elif ENABLED(MARKFORGED_YX)
-      axis == CORE_AXIS_1
-        ? count_position[CORE_AXIS_1]
-        : count_position[CORE_AXIS_2] TERN(MARKFORGED_INVERSE, +, -) count_position[CORE_AXIS_1]
-    #else // !IS_CORE
-      count_position[axis]
-    #endif
-  );
+  float axis_pos = count_position[axis];
+  #if IS_CORE
+    if (axis == CORE_AXIS_2)
+      axis_pos = CORESIGN(count_position[CORE_AXIS_1] - axis_pos) * 0.5f;
+    else if (axis == CORE_AXIS_1)
+      axis_pos = (axis_pos + count_position[CORE_AXIS_2]) * 0.5f;
+  #elif ENABLED(MARKFORGED_XY)
+    if (axis == CORE_AXIS_1) axis_pos TERN(MARKFORGED_INVERSE, +=, -=) count_position[CORE_AXIS_2];
+  #elif ENABLED(MARKFORGED_YX)
+    if (axis == CORE_AXIS_2) axis_pos TERN(MARKFORGED_INVERSE, +=, -=) count_position[CORE_AXIS_1];
+  #endif
+  endstops_trigsteps[axis] = axis_pos;
 
   // Discard the rest of the move if there is a current block
   quick_stop();
