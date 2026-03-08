@@ -29,6 +29,8 @@
  * Date: 2023/05/05
  */
 
+#include "../../../feature/bedlevel/bedlevel.h"
+
 class MeshViewer {
 public:
   static float max, min;

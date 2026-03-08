@@ -819,7 +819,6 @@ void unified_bed_leveling::shift_mesh_height(const float zoffs) {
           ExtUI::onMeshUpdate(best.pos, ExtUI::G29_POINT_FINISH);
           ExtUI::onMeshUpdate(best.pos, measured_z);
         #endif
-        TERN_(DWIN_LCD_PROUI, meshViewer.drawMeshPoint(best.pos, measured_z));
       }
       SERIAL_FLUSH(); // Prevent host M105 buffer overrun.
 
