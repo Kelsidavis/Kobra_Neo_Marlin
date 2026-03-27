@@ -418,14 +418,22 @@ typedef struct { float p, i, d, c, f; } raw_pidcf_t;
 typedef struct TempInfo {
   private:
     raw_adc_t acc;
-    raw_adc_t raw;
+    volatile raw_adc_t raw;
   public:
     celsius_float_t celsius;
     inline void reset() { acc = 0; }
     inline void sample(const raw_adc_t s) { acc += s; }
     inline void update() { raw = acc; }
     void setraw(const raw_adc_t r) { raw = r; }
-    raw_adc_t getraw() const { return raw; }
+    raw_adc_t getraw() const {
+      #ifndef CPU_32_BIT
+        raw_adc_t r1, r2;
+        do { r1 = raw; r2 = raw; } while (r1 != r2);
+        return r1;
+      #else
+        return raw;
+      #endif
+    }
 } temp_info_t;
 
 #if HAS_TEMP_REDUNDANT
