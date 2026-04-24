@@ -276,7 +276,7 @@ if [[ $TESTENV == '-' ]]; then
   echo
   for (( ; ; ))
   do
-    read -p "Select a test to apply (1-$IND) : " NAMEIND
+    read -p "Select an environment to test (1-$IND) : " NAMEIND
     [[ -z $NAMEIND ]] && { errout "(canceled)" ; exit 1 ; }
     [[ $NAMEIND =~ $ISNUM ]] && ((NAMEIND >= 1 && NAMEIND <= IND)) && { TESTENV=${NAMES[$NAMEIND-1]} ; echo ; break ; }
     errout "Invalid selection."
@@ -284,7 +284,7 @@ if [[ $TESTENV == '-' ]]; then
 fi
 
 # Count up the number of tests
-TESTCOUNT=$(ls -1 "$TESTPATH/$TESTENV"/config-*.ini 2>/dev/null | wc -l)
+TESTCOUNT=$(ls -1 "$TESTPATH/$TESTENV"/config-*.ini 2>/dev/null | wc -l | tr -d ' ')
 
 # User entered a number?
 (( CHOICE && CHOICE > TESTCOUNT )) && { errout "Invalid test selection '$CHOICE' (1-$TESTCOUNT)." ; exit 1 ; }
@@ -303,7 +303,8 @@ if [[ $CHOICE == 0 ]]; then
     echo " $IND) $DESC"
   done
   CHOICE=1
-  if [[ $TESTCOUNT > 1 ]]; then
+  if (( TESTCOUNT > 1 )); then
+    echo
     for (( ; ; ))
     do
       read -p "Select a '$TESTENV' test (1-$TESTCOUNT) : " CHOICE
