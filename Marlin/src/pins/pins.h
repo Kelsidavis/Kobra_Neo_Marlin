@@ -932,6 +932,8 @@
   #include "hc32f4/pins_AQUILA_101.h"               // HC32F460                             env:HC32F460C_aquila_101 env:HC32F460C_openhc32boot
 #elif MB(CREALITY_ENDER2P_V24S4)
   #include "hc32f4/pins_CREALITY_ENDER2P_V24S4.h"   // HC32F460                             env:HC32F460C_e2p24s4 env:HC32F460C_openhc32boot
+#elif MB(ANYCUBIC_KOBRA_NEO)
+  #include "hc32f4/pins_ANYCUBIC_KOBRA_NEO.h"       // HC32F460                             env:HC32F460E_anycubic_kobra_neo
 
 //
 // GD32 ARM Cortex-M3

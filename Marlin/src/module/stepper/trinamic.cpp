@@ -771,42 +771,86 @@ enum StealthIndex : uint8_t {
     const uint16_t mA, const uint16_t microsteps, const uint32_t hyb_thrs, const bool stealth,
     const chopper_timing_t &chop_init, const bool interpolate, float hold_multiplier
   ) {
-    TMC2208_n::GCONF_t gconf{0};
-    gconf.pdn_disable = true; // Use UART
-    gconf.mstep_reg_select = true; // Select microsteps with UART
-    gconf.i_scale_analog = false;
-    gconf.en_spreadcycle = !stealth;
-    st.GCONF(gconf.sr);
-    st.stored.stealthChop_enabled = stealth;
+    #ifdef TMC6609
+      // Anycubic single-wire-UART variant (Kobra Neo, Vyper, etc.). The
+      // stock OEM boards leave CHOPCONF.toff = 0 on power-up — every boot
+      // must write CHOPCONF.toff to a non-zero value to enable the MOSFET
+      // stage. Sequence and register values match the working stock fork
+      // (TheUnlimited64/Kobra_Neo_Firmware:Marlin/src/module/stepper/trinamic.cpp).
+      st.OTP_PROG(0xbd05);            // OTP byte 0 bit 5 = OTTRIM[0] (idempotent)
+      delay(50);
 
-    TMC2208_n::CHOPCONF_t chopconf{0};
-    chopconf.tbl    = 0b01; // blank_time = 24
-    chopconf.toff   = chop_init.toff;
-    chopconf.intpol = interpolate;
-    chopconf.hend   = chop_init.hend + 3;
-    chopconf.hstrt  = chop_init.hstrt - 1;
-    chopconf.dedge  = ENABLED(EDGE_STEPPING);
-    st.CHOPCONF(chopconf.sr);
+      TMC2208_n::CHOPCONF_t chopconf{0};
+      chopconf.tbl    = 0b01;
+      chopconf.toff   = chop_init.toff;
+      chopconf.intpol = interpolate;
+      chopconf.hend   = chop_init.hend + 3;
+      chopconf.hstrt  = chop_init.hstrt - 1;
+      chopconf.diss2vs = 1;           // Disable short-to-VS protection (board-specific)
+      chopconf.dedge  = ENABLED(EDGE_STEPPING);
+      st.CHOPCONF(chopconf.sr);
 
-    st.rms_current(mA, hold_multiplier);
-    st.microsteps(microsteps);
-    st.iholddelay(10);
-    st.TPOWERDOWN(128); // ~2s until driver lowers to hold current
+      // Current scale is set via VREF analog pin on this board, NOT IRUN —
+      // do not call rms_current() here, that would override the analog scale.
+      // Boot in spreadCycle, then switch to user's stealthChop preference.
+      TMC2208_n::GCONF_t gconf{0};
+      gconf.i_scale_analog = true;    // Board uses VREF resistor divider
+      gconf.pdn_disable    = true;    // Free PDN_UART pin for UART use
+      gconf.en_spreadcycle = true;    // Boot in spreadCycle
+      st.GCONF(gconf.sr);
+      delay(200);
 
-    TMC2208_n::PWMCONF_t pwmconf{0};
-    pwmconf.pwm_lim = 12;
-    pwmconf.pwm_reg = 8;
-    pwmconf.pwm_autograd = true;
-    pwmconf.pwm_autoscale = true;
-    pwmconf.pwm_freq = 0b01;
-    pwmconf.pwm_grad = 14;
-    pwmconf.pwm_ofs = 36;
-    st.PWMCONF(pwmconf.sr);
+      gconf.en_spreadcycle = !stealth;
+      st.GCONF(gconf.sr);
+      delay(200);
+      st.stored.stealthChop_enabled = stealth;
 
-    TERN(HYBRID_THRESHOLD, st.set_pwm_thrs(hyb_thrs), UNUSED(hyb_thrs));
+      st.microsteps(microsteps);
+      st.iholddelay(10);
+      st.TPOWERDOWN(128);
 
-    st.GSTAT(0b111); // Clear
-    delay(200);
+      st.GSTAT(0b111);                // Clear faults
+      delay(200);
+
+      UNUSED(mA); UNUSED(hyb_thrs); UNUSED(hold_multiplier);
+    #else
+      TMC2208_n::GCONF_t gconf{0};
+      gconf.pdn_disable = true; // Use UART
+      gconf.mstep_reg_select = true; // Select microsteps with UART
+      gconf.i_scale_analog = false;
+      gconf.en_spreadcycle = !stealth;
+      st.GCONF(gconf.sr);
+      st.stored.stealthChop_enabled = stealth;
+
+      TMC2208_n::CHOPCONF_t chopconf{0};
+      chopconf.tbl    = 0b01; // blank_time = 24
+      chopconf.toff   = chop_init.toff;
+      chopconf.intpol = interpolate;
+      chopconf.hend   = chop_init.hend + 3;
+      chopconf.hstrt  = chop_init.hstrt - 1;
+      chopconf.dedge  = ENABLED(EDGE_STEPPING);
+      st.CHOPCONF(chopconf.sr);
+
+      st.rms_current(mA, hold_multiplier);
+      st.microsteps(microsteps);
+      st.iholddelay(10);
+      st.TPOWERDOWN(128); // ~2s until driver lowers to hold current
+
+      TMC2208_n::PWMCONF_t pwmconf{0};
+      pwmconf.pwm_lim = 12;
+      pwmconf.pwm_reg = 8;
+      pwmconf.pwm_autograd = true;
+      pwmconf.pwm_autoscale = true;
+      pwmconf.pwm_freq = 0b01;
+      pwmconf.pwm_grad = 14;
+      pwmconf.pwm_ofs = 36;
+      st.PWMCONF(pwmconf.sr);
+
+      TERN(HYBRID_THRESHOLD, st.set_pwm_thrs(hyb_thrs), UNUSED(hyb_thrs));
+
+      st.GSTAT(0b111); // Clear
+      delay(200);
+    #endif
   }
 #endif // TMC2208
 
@@ -1164,7 +1208,15 @@ void reset_trinamic_drivers() {
   }
 
   #define TMC_SWSERIAL_CONFLICT_MSG(A) STRINGIFY(A) "_SLAVE_ADDRESS conflicts with another driver using the same " STRINGIFY(A) "_SERIAL_RX_PIN or " STRINGIFY(A) "_SERIAL_TX_PIN"
-  #define SA_NO_TMC_SW_C(A) static_assert(1 >= count_tmc_sw_serial_matches(TMC_SW_DETAIL_ARGS(A), 0, COUNT(sanity_tmc_sw_details)), TMC_SWSERIAL_CONFLICT_MSG(A));
+  #ifdef TMC6609
+    // Anycubic single-wire-UART variant: all drivers share PB2 at address 0
+    // and are configured by broadcasting write-only packets. Reads are
+    // never issued (no MONITOR_DRIVER_STATUS), so bus collisions are
+    // structurally avoided. Skip the per-driver uniqueness sanity check.
+    #define SA_NO_TMC_SW_C(A) /* skipped for TMC6609 broadcast */
+  #else
+    #define SA_NO_TMC_SW_C(A) static_assert(1 >= count_tmc_sw_serial_matches(TMC_SW_DETAIL_ARGS(A), 0, COUNT(sanity_tmc_sw_details)), TMC_SWSERIAL_CONFLICT_MSG(A));
+  #endif
   MAP(SA_NO_TMC_SW_C, ALL_AXIS_NAMES)
 #endif
 

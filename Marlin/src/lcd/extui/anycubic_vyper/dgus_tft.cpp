@@ -52,6 +52,11 @@
 #define DEBUG_OUT ACDEBUGLEVEL
 #include "../../../core/debug_out.h"
 
+// Arduino.h's min/max/abs macros collide with the C++ STL templates pulled
+// in by <string>; undefine them here so the standard library compiles.
+#undef min
+#undef max
+#undef abs
 #include <string>
 
 namespace Anycubic {

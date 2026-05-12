@@ -49,7 +49,13 @@
   #define ST7789V_COLOR ST7789V_MADCTL_BGR
 #endif
 
-#define ST7789V_MADCTL_DATA       (ST7789V_ORIENTATION) | (ST7789V_COLOR)
+// Kobra Neo requires MADCTL 0xB0 (MY|MV|ML) for correct landscape orientation.
+// The standard computation can't set ML, so override directly for this board.
+#if MB(ANYCUBIC_KOBRA_NEO)
+  #define ST7789V_MADCTL_DATA     0xB0
+#else
+  #define ST7789V_MADCTL_DATA     (ST7789V_ORIENTATION) | (ST7789V_COLOR)
+#endif
 
 #define ST7789V_NOP               0x00 // No Operation
 #define ST7789V_SWRESET           0x01 // Software reset
